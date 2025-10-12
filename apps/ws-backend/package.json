@@ -15,7 +15,8 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1",
+    "@repo/backend-common": "*"
   },
   "keywords": [],
   "author": "",
