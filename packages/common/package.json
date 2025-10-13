@@ -1,6 +1,7 @@
 {
   "name": "@repo/common",
   "version": "1.0.0",
+  "types": "module",
   "description": "",
   "main": "index.js",
   "exports":{
@@ -15,7 +16,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "zod": "^4.1.12"
   }

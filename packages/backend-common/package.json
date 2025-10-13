@@ -15,5 +15,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+   "dependencies": {
+    "@types/node": "^22.10.5"
+  }
 }

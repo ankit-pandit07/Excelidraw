@@ -11,7 +11,8 @@
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "jsonwebtoken": "^9.0.2",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "@repo/db":"*"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
@@ -20,6 +21,5 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "license": "ISC"
 }
