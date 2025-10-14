@@ -75,15 +75,25 @@ app.post("/room",middleware,async(req,res)=>{
         res.json({
             message:"Incorrect Inputs"
         })
+        return;
     }
     //@ts-ignore : TODO Fix this
     const userId=req.userId;
-    await prismaClient.room.create({
+   try{
+     const room=await prismaClient.room.create({
         data:{
-            slug:parseData.data.name,
+            slug: parseData.data.name,
             adminId:userId
         }
     })
+    res.json({
+        roomId:room.id
+    })
+}catch(e){
+    res.status(411).json({
+        message:"Room already exists with this name"
+    })
+}
 })
 
 const PORT = process.env.PORT || 3001; 
