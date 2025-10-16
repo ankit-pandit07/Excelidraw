@@ -1,6 +1,6 @@
 
 
-import { Authpage } from "../components/Authpage";
+import { Authpage } from "../../components/Authpage";
 
 
 export default function Signin(){

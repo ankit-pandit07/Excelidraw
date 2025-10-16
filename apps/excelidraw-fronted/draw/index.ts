@@ -1,6 +1,6 @@
+import { HTTP_BACKEND } from "@/config";
 import axios from "axios";
-import { json } from "node:stream/consumers";
-import { HTTP_BACKEND } from "../config";
+
 
 type Shape={
     type:"rect";
@@ -57,7 +57,8 @@ export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:Web
                     type:"chat",
                     message:JSON.stringify({
                         shape
-                    })
+                    }),
+                    roomId
                   })) 
             })
 
@@ -88,16 +89,14 @@ export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:Web
             })
         }
 
-async function getExistingShapes(roomId: string){
-    const res=await axios.get(`${HTTP_BACKEND}/chats/${roomId}`)
+async function getExistingShapes(roomId: string) {
+    const res = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
+    const messages = res.data.messages;
 
-    const messages=res.data.messages;
-   
-
-    const shapes=messages.map((x:{message:string})=>{
-        const messageData=JSON.parse(x.message)
-        return messageData
+    const shapes = messages.map((x: {message: string}) => {
+        const messageData = JSON.parse(x.message)
+        return messageData.shape;
     })
-    return shapes;
 
+    return shapes;
 }

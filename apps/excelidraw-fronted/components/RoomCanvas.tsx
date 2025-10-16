@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
 import { Canvas } from "./Canvas";
-import { WEBSOCKET_URL } from "../config";
+import { WEBSOCKET_URL } from "@/config";
 
 export function RoomCanvas({roomId}:{roomId:string}){
     const [socket,setSocket]=useState<WebSocket | null>(null);

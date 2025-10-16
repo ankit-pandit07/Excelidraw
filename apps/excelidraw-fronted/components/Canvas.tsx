@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
-import { initDraw } from "../draw";
-
+import { initDraw } from "@/draw";
 
 export function Canvas({
     roomId,
