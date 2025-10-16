@@ -1,7 +1,6 @@
 
 
 import { ChatRoom } from "../../../Components/ChatRoom";
-
 import axios from "axios";
 import { BACKEND_URL } from "../../config";
 
@@ -11,7 +10,7 @@ async function getRoomId(slug:string){
     return response.data.room.id
 }
 
-export default async function ({
+export default async function({
     params
 }:{
     params:{
