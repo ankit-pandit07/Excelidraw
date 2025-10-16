@@ -10,14 +10,15 @@ export function RoomCanvas({roomId}:{roomId:string}){
 
 
     useEffect(()=>{
-        const ws=new WebSocket(`${WEBSOCKET_URL}?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI1MGNjNzY0ZC0zNjIxLTQ3NmQtOGFiNC1hZWFmZGYxNjRkZmUiLCJpYXQiOjE3NjA1NDA5NTl9.scvlQcUNEFEdG_Myr_zu4ZLxZPYH0hwADnNtLkeUfjE`)
+        const ws=new WebSocket(`${WEBSOCKET_URL}?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0MjgwYjVjNS0yMmYyLTQ1ZjktOWEyYy1lYTdmZGJhYjVkMGMiLCJpYXQiOjE3NjA2MDAxODR9.xBBpPXaQFSZY8X0WrQE9ytjWYFEnFzaIFalzJ4Hj9uM`)
 
         ws.onopen=()=>{
             setSocket(ws)
-            ws.send(JSON.stringify({
+           const data=JSON.stringify({
                 type:"join_room",
                 roomId
-            }))
+            })
+            ws.send(data);
         }
     },[])
 
