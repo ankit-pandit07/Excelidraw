@@ -22,7 +22,7 @@ export function ChatRoomClient({
             socket.onmessage=(event)=>{
                 const parseData=JSON.parse(event.data);
                 if(parseData.type==="chat"){
-                    setChats(c=>[...c,parseData.message])
+                    setChats(c=>[...c,{message:parseData.message}])
                 }
             }
         }

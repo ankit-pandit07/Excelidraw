@@ -1,3 +1,4 @@
+
 import { HTTP_BACKEND } from "@/config";
 import axios from "axios";
 
@@ -19,11 +20,12 @@ export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:Web
 
             let existingShapes:Shape[]= await getExistingShapes(roomId);
             if(!ctx){
-                return;
+                return
             }
 
             socket.onmessage=(event)=>{
-                const message=JSON.parse(event.data);
+                const message= JSON.parse(event.data);
+
                 if(message.type=="chat"){
                     const parseShape=JSON.parse(message.message)
                     existingShapes.push(parseShape.shape)
@@ -52,6 +54,7 @@ export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:Web
                     height,
                     width
                 }
+               
                 existingShapes.push(shape);
                   socket.send(JSON.stringify({
                     type:"chat",
@@ -90,13 +93,23 @@ export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:Web
         }
 
 async function getExistingShapes(roomId: string) {
-    const res = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
-    //@ts-ignore
-    const messages = res.data.messages;
+  const res = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
+  //@ts-ignore
+  const messages = res.data.messages;
 
-    const shapes = messages.map((x: {message: string}) => {
-        const messageData = JSON.stringify(x.message)
-        return messageData;
+  const shapes = messages
+    .map((x: { message: string }) => {
+      try {
+        const parsed = JSON.parse(x.message);
+        if (parsed && parsed.shape) {
+          return parsed.shape;
+        }
+      } catch {
+        // Not a shape JSON, ignore
+      }
+      return null;
     })
-    return shapes;
+    .filter(Boolean);
+
+  return shapes;
 }

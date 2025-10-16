@@ -6,7 +6,8 @@ import { BACKEND_URL } from "../app/config";
 
 async function getChats(roomId:string){
     const response=await axios.get(`${BACKEND_URL}/chats/${roomId}`);
-    return response.data.messages
+    //@ts-ignore
+    return response.data.messages;
 }
 
 export async function ChatRoom({id}:{
