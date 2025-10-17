@@ -106,7 +106,7 @@ if(!shape){
         const centerY=startY+radius;
     
         ctx.beginPath();
-        ctx.arc(centerX,centerY,Math.abs(radius),0, Math.PI * 2);
+        ctx.arc(centerX,centerY,radius,0, Math.PI * 2);
         ctx.stroke();
         ctx.closePath();
     }
@@ -127,7 +127,7 @@ function clearCanvas(existingShapes:Shape[], canvas:HTMLCanvasElement,ctx:Canvas
             ctx.strokeRect(shape.x,shape.y,shape.width,shape.height);
         }else if(shape.type==="circle"){
             ctx.beginPath();
-            ctx.arc(shape.centerX,shape.centerY,Math.abs(shape.radius),0,Math.PI * 2);
+            ctx.arc(shape.centerX,shape.centerY,shape.radius,0,Math.PI * 2);
             ctx.stroke();
             ctx.closePath();
         }
