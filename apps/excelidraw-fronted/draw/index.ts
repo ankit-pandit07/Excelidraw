@@ -16,10 +16,10 @@ type Shape={
     radius:number;
 } | {
     type:"pencil";
-    startX:number;
-    startY:number;
-    endX:number;
-    endY:number;
+    points:{
+        x:number;
+        y:number;
+    }[]
 }
 export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:WebSocket){
     const ctx=canvas.getContext("2d");
@@ -40,17 +40,31 @@ export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:Web
     }
 
     clearCanvas(existingShapes,canvas,ctx)
+    let painting=false;
+    let pencilPoints:{
+        x:number;
+        y:number
+    }[]=[]
     let clicked=false;
     let startX=0;
     let startY=0;
 
     canvas.addEventListener("mousedown",(e)=>{
+    //@ts-ignore
+    const selectedTool=window.selectedTool
     clicked=true
     startX=e.clientX
     startY=e.clientY
+
+    if(selectedTool==="pencil"){
+        painting=true;
+        pencilPoints=[{x:startX,y:startY}];
+        ctx.beginPath();
+        ctx.moveTo(startX,startY);
+    }
     })
     canvas.addEventListener("mouseup",(e)=>{
-    clicked=false
+    clicked=false;
     const width=e.clientX-startX;
     const height=e.clientY-startY;
     //@ts-ignore
@@ -75,6 +89,13 @@ export async function initDraw(canvas:HTMLCanvasElement,roomId:string,socket:Web
         centerY:startY + radius,
     }
 
+}else if (selectedTool==="pencil"){
+    painting=false;
+    ctx.closePath();
+    shape={
+        type:"pencil",
+        points:pencilPoints
+    }
 }
 if(!shape){
     return
@@ -109,10 +130,26 @@ if(!shape){
         ctx.arc(centerX,centerY,radius,0, Math.PI * 2);
         ctx.stroke();
         ctx.closePath();
+    }else if(selectedTool==="pencil" && painting){
+        const x=e.clientX;
+        const y=e.clientY;
+
+        const lastPoint=pencilPoints[pencilPoints.length-1];
+        ctx.beginPath();
+        ctx.moveTo(lastPoint.x,lastPoint.y);
+        ctx.lineTo(x,y);
+        ctx.strokeStyle="#ffffff";
+        ctx.lineCap="round";
+        ctx.stroke();
+        ctx.closePath();
+
+        pencilPoints.push({x,y});
+        return
+
     }
 
-        }
-    })
+ }
+})
 }
 
 function clearCanvas(existingShapes:Shape[], canvas:HTMLCanvasElement,ctx:CanvasRenderingContext2D){
@@ -128,6 +165,16 @@ function clearCanvas(existingShapes:Shape[], canvas:HTMLCanvasElement,ctx:Canvas
         }else if(shape.type==="circle"){
             ctx.beginPath();
             ctx.arc(shape.centerX,shape.centerY,shape.radius,0,Math.PI * 2);
+            ctx.stroke();
+            ctx.closePath();
+        }else if(shape.type==="pencil"){
+            ctx.beginPath();
+            for(let i=1;i<shape.points.length;i++){
+                const p1=shape.points[i-1];
+                const p2=shape.points[i];
+                ctx.moveTo(p1.x,p1.y);
+                ctx.lineTo(p2.x,p2.y)
+            }
             ctx.stroke();
             ctx.closePath();
         }
