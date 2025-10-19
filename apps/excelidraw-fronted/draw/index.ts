@@ -21,7 +21,15 @@ type Shape =
         x: number;
         y: number;
       }[];
-    };
+    } |{
+      type:"triangle";
+      x1:number;
+      y1:number;
+      x2:number;
+      y2:number;
+      x3:number;
+      y3:number;
+    }
 
 let scale = 1;
 let setX = 0;
@@ -132,6 +140,16 @@ export async function initDraw(
         type: "pencil",
         points: pencilPoints,
       };
+    }else if(selectedTool==="triangle"){
+      shape={
+        type:"triangle",
+        x1:startX+width/2,
+        y1:startY,
+        x2:startX,
+        y2:startY+height,
+        x3:startX+width,
+        y3:startY+height
+      }
     }
     if (!shape) {
       return;
@@ -179,7 +197,15 @@ export async function initDraw(
         ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         ctx.stroke();
         ctx.closePath();
-      } else if (selectedTool === "pencil" && painting) {
+      } else if(selectedTool==="triangle"){
+        ctx.beginPath();
+        ctx.moveTo(startX+width/2,startY);
+        ctx.lineTo(startX,startY+height);
+        ctx.lineTo(startX+width,startY+height);
+        ctx.closePath();
+        ctx.stroke();
+      }
+      else if (selectedTool === "pencil" && painting) {
         const coords = screenToWorld(e.clientX, e.clientY);
         const lastPoint = pencilPoints[pencilPoints.length - 1];
         ctx.beginPath();
@@ -260,6 +286,14 @@ function clearCanvas(
       }
       ctx.stroke();
       ctx.closePath();
+    }else if(shape.type==="triangle"){
+      ctx.beginPath();
+      ctx.moveTo(shape.x1,shape.y1);
+      ctx.lineTo(shape.x2,shape.y2);
+      ctx.lineTo(shape.x3,shape.y3);
+      ctx.closePath();
+      ctx.strokeStyle="rgba(255,255,255)"
+      ctx.stroke();
     }
   });
   ctx.restore();

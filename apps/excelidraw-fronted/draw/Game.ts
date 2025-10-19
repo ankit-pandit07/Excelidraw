@@ -21,6 +21,15 @@ type Shape =
         x: number;
         y: number;
       }[];
+    }
+  | {
+      type: "triangle";
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      x3: number;
+      y3: number;
     };
 
 export class Game {
@@ -31,7 +40,7 @@ export class Game {
   private clicked: boolean;
   private startX = 0;
   private startY = 0;
-  private selectedTool: Tool = "circle";
+  private selectedTool: Tool | "triangle" = "circle";
   private pencilPoints: { x: number; y: number }[] = [];
   private painting = true;
   socket: WebSocket;
@@ -63,15 +72,15 @@ export class Game {
     this.canvas.removeEventListener("wheel", this.wheelHandler);
   }
 
-  setTool(tool: "circle" | "pencil" | "rect") {
+  setTool(tool: "circle" | "pencil" | "rect" | "triangle") {
     this.selectedTool = tool;
   }
-  
+
   async init() {
     this.existingShapes = await getExistingShapes(this.roomId);
     this.clearCanvas();
   }
-  
+
   initHandlers() {
     this.socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -82,7 +91,7 @@ export class Game {
       }
     };
   }
-  
+
   private screenToWorld(x: number, y: number) {
     const rect = this.canvas.getBoundingClientRect();
     const canvasX = x - rect.left;
@@ -96,26 +105,17 @@ export class Game {
 
   clearCanvas() {
     this.ctx.save();
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for clearing
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.fillStyle = "rgba(0,0,0)";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.restore();
 
     this.ctx.save();
-    this.ctx.setTransform(
-      this.scale,
-      0,
-      0,
-      this.scale,
-      this.setX,
-      this.setY
-    );
+    this.ctx.setTransform(this.scale, 0, 0, this.scale, this.setX, this.setY);
+    this.ctx.strokeStyle = "rgba(255,255,255)";
 
-    // Draw all existing shapes with world coordinates
     this.existingShapes.forEach((shape) => {
-      this.ctx.strokeStyle = "rgba(255,255,255)";
-      
       if (shape.type === "rect") {
         this.ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
       } else if (shape.type === "circle") {
@@ -139,13 +139,20 @@ export class Game {
         }
         this.ctx.stroke();
         this.ctx.closePath();
+      } else if (shape.type === "triangle") {
+        this.ctx.beginPath();
+        this.ctx.moveTo(shape.x1, shape.y1);
+        this.ctx.lineTo(shape.x2, shape.y2);
+        this.ctx.lineTo(shape.x3, shape.y3);
+        this.ctx.closePath();
+        this.ctx.stroke();
       }
     });
 
     this.ctx.restore();
   }
 
-  mouseDownHandle = (e) => {
+  mouseDownHandle = (e: MouseEvent) => {
     if (e.button === 1) {
       this.panning = true;
       this.panX = e.clientX;
@@ -164,7 +171,7 @@ export class Game {
     }
   };
 
-  mouseupHandler = (e) => {
+  mouseupHandler = (e: MouseEvent) => {
     if (this.panning) {
       this.panning = false;
       return;
@@ -176,9 +183,9 @@ export class Game {
     const coords = this.screenToWorld(e.clientX, e.clientY);
     const width = coords.x - this.startX;
     const height = coords.y - this.startY;
-    
+
     let shape: Shape | null = null;
-    
+
     if (this.selectedTool === "rect") {
       shape = {
         type: "rect",
@@ -192,36 +199,42 @@ export class Game {
       shape = {
         type: "circle",
         radius: radius,
-        centerX: this.startX + (width / 2),
-        centerY: this.startY + (height / 2),
+        centerX: this.startX + width / 2,
+        centerY: this.startY + height / 2,
+      };
+    } else if (this.selectedTool === "triangle") {
+      shape = {
+        type: "triangle",
+        x1: this.startX + width / 2,
+        y1: this.startY,
+        x2: this.startX,
+        y2: this.startY + height,
+        x3: this.startX + width,
+        y3: this.startY + height,
       };
     } else if (this.selectedTool === "pencil") {
       this.painting = false;
       shape = {
         type: "pencil",
-        points: [...this.pencilPoints], // Copy the array
+        points: [...this.pencilPoints],
       };
     }
-    
-    if (!shape) {
-      return;
-    }
+
+    if (!shape) return;
 
     this.existingShapes.push(shape);
     this.socket.send(
       JSON.stringify({
         type: "chat",
-        message: JSON.stringify({
-          shape,
-        }),
+        message: JSON.stringify({ shape }),
         roomId: this.roomId,
       })
     );
-    
+
     this.clearCanvas();
   };
 
-  mousemoveHandler = (e) => {
+  mousemoveHandler = (e: MouseEvent) => {
     if (this.panning) {
       const dx = e.clientX - this.panX;
       const dy = e.clientY - this.panY;
@@ -237,22 +250,29 @@ export class Game {
       const coords = this.screenToWorld(e.clientX, e.clientY);
       const width = coords.x - this.startX;
       const height = coords.y - this.startY;
-      
+
       this.clearCanvas();
       this.ctx.save();
       this.ctx.setTransform(this.scale, 0, 0, this.scale, this.setX, this.setY);
       this.ctx.strokeStyle = "rgba(255,255,255)";
-      
+
       if (this.selectedTool === "rect") {
         this.ctx.strokeRect(this.startX, this.startY, width, height);
       } else if (this.selectedTool === "circle") {
         const radius = Math.max(Math.abs(width), Math.abs(height)) / 2;
-        const centerX = this.startX + (width / 2);
-        const centerY = this.startY + (height / 2);
+        const centerX = this.startX + width / 2;
+        const centerY = this.startY + height / 2;
         this.ctx.beginPath();
         this.ctx.arc(centerX, centerY, Math.abs(radius), 0, Math.PI * 2);
         this.ctx.stroke();
         this.ctx.closePath();
+      } else if (this.selectedTool === "triangle") {
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.startX + width / 2, this.startY);
+        this.ctx.lineTo(this.startX, this.startY + height);
+        this.ctx.lineTo(this.startX + width, this.startY + height);
+        this.ctx.closePath();
+        this.ctx.stroke();
       } else if (this.selectedTool === "pencil" && this.painting) {
         const lastPoint = this.pencilPoints[this.pencilPoints.length - 1];
         this.ctx.beginPath();
@@ -264,7 +284,7 @@ export class Game {
         this.ctx.closePath();
         this.pencilPoints.push({ x: coords.x, y: coords.y });
       }
-      
+
       this.ctx.restore();
     }
   };
@@ -283,15 +303,12 @@ export class Game {
     const direction = e.deltaY < 0 ? 1 : -1;
     let newScale = this.scale * (direction > 0 ? zoomFactor : 1 / zoomFactor);
 
-    if (newScale < 0.5) {
-      newScale = 0.5;
-    }
+    if (newScale < 0.5) newScale = 0.5;
 
     this.setX = mouseX - worldX * newScale;
     this.setY = mouseY - worldY * newScale;
 
     this.scale = newScale;
-
     this.clearCanvas();
   };
 
