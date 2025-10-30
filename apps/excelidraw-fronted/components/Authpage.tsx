@@ -2,14 +2,46 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Mail, Lock, User } from "lucide-react";
+import axios from "axios";
 
 export function Authpage({ isSignin }: { isSignin: boolean }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
-  const handleAuth = () => {
+  const handleAuth = async () => {
     setLoading(true);
-    setTimeout(() => setLoading(false), 2000); // Fake loading
+    setMessage("");
+
+    try {
+      if (isSignin) {
+        const res = await axios.post("/signin", {
+          email: form.email,
+          password: form.password,
+        });
+        //@ts-ignore
+        setMessage(res.data.message || "Signed in successfully!");
+        router.push("/canvas");
+      } else {
+        const res = await axios.post("/signup", {
+          name: form.name,
+          email: form.email,
+          password: form.password,
+        });
+        //@ts-ignore
+        setMessage(res.data.message || "Account created successfully!");
+        router.push("/signin");
+      }
+    } catch (err: any) {
+      setMessage(err.response?.data?.error || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSwitchAuth = () => {
@@ -33,13 +65,14 @@ export function Authpage({ isSignin }: { isSignin: boolean }) {
 
         {/* Form Fields */}
         <div className="space-y-5">
-          {/* Name field only for signup */}
           {!isSignin && (
             <div className="relative">
               <User className="absolute left-4 top-3.5 text-gray-400 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Full Name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
               />
             </div>
@@ -50,6 +83,8 @@ export function Authpage({ isSignin }: { isSignin: boolean }) {
             <input
               type="email"
               placeholder="Email address"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
             />
           </div>
@@ -59,11 +94,12 @@ export function Authpage({ isSignin }: { isSignin: boolean }) {
             <input
               type="password"
               placeholder="Password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
             />
           </div>
 
-          {/* Forgot password (only for sign-in) */}
           {isSignin && (
             <div className="text-right">
               <button className="text-sm text-indigo-600 hover:underline font-medium">
@@ -106,7 +142,11 @@ export function Authpage({ isSignin }: { isSignin: boolean }) {
               <span className="font-medium text-gray-700">Google</span>
             </button>
             <button className="flex items-center gap-2 border border-gray-300 rounded-xl px-4 py-2 hover:bg-gray-50 transition-all">
-             <img src="https://www.svgrepo.com/show/475654/github-color.svg" alt="GitHub" className="w-6 h-6" />
+              <img
+                src="https://www.svgrepo.com/show/475654/github-color.svg"
+                alt="GitHub"
+                className="w-6 h-6"
+              />
               <span className="font-medium text-gray-700">GitHub</span>
             </button>
           </div>
@@ -136,6 +176,11 @@ export function Authpage({ isSignin }: { isSignin: boolean }) {
             </>
           )}
         </div>
+
+        {/* Message */}
+        {message && (
+          <p className="mt-4 text-center text-sm text-gray-600">{message}</p>
+        )}
       </div>
     </div>
   );
