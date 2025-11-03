@@ -1,7 +1,7 @@
 import { getExistingShapes } from "./http";
 import { Tool } from "@/components/Canvas";
 
- type Shape =
+type Shape =
   | {
       type: "rect";
       x: number;
@@ -66,7 +66,6 @@ export class Game {
   private panX = 0;
   private panY = 0;
 
-  // Text state
   private isWritingText = false;
   private currentText = "";
   private textPosition = { x: 0, y: 0 };
@@ -98,6 +97,10 @@ export class Game {
   }
 
   setTool(tool: "circle" | "pencil" | "rect" | "triangle" | "arrow" | "text") {
+    if (this.isWritingText && this.selectedTool === "text") {
+      this.saveText();
+    }
+
     this.selectedTool = tool;
     this.isWritingText = false;
     this.currentText = "";
@@ -137,7 +140,6 @@ export class Game {
     }
   }
 
-  // Initialize text keyboard handlers
   private initTextHandlers() {
     document.addEventListener("keydown", this.keyDownHandle);
   }
@@ -146,19 +148,15 @@ export class Game {
     if (!this.isWritingText || this.selectedTool !== "text") return;
 
     if (e.key === "Enter") {
-      // Save text and finish
       this.saveText();
     } else if (e.key === "Escape") {
-      // Cancel text writing
       this.isWritingText = false;
       this.currentText = "";
       this.clearCanvas();
     } else if (e.key === "Backspace") {
-      // Remove last character
       this.currentText = this.currentText.slice(0, -1);
       this.clearCanvas();
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-      // Add character to text
       this.currentText += e.key;
       this.clearCanvas();
     }
@@ -171,7 +169,7 @@ export class Game {
         x: this.textPosition.x,
         y: this.textPosition.y,
         text: this.currentText,
-        fontSize: 16 / this.scale
+        fontSize: 16 / this.scale,
       };
 
       this.existingShapes.push(textShape);
@@ -255,18 +253,28 @@ export class Game {
     // Draw current text being written
     if (this.isWritingText) {
       this.ctx.font = `${16 / this.scale}px Arial`;
-      
+
       // Draw the text
       if (this.currentText) {
-        this.ctx.fillText(this.currentText, this.textPosition.x, this.textPosition.y);
+        this.ctx.fillText(
+          this.currentText,
+          this.textPosition.x,
+          this.textPosition.y
+        );
       }
-      
+
       // Draw blinking cursor line
       if (this.showCursor) {
         const textWidth = this.ctx.measureText(this.currentText).width;
         this.ctx.beginPath();
-        this.ctx.moveTo(this.textPosition.x + textWidth, this.textPosition.y - 12);
-        this.ctx.lineTo(this.textPosition.x + textWidth, this.textPosition.y + 4);
+        this.ctx.moveTo(
+          this.textPosition.x + textWidth,
+          this.textPosition.y - 12
+        );
+        this.ctx.lineTo(
+          this.textPosition.x + textWidth,
+          this.textPosition.y + 4
+        );
         this.ctx.lineWidth = 1;
         this.ctx.strokeStyle = "rgba(255,255,255,0.8)";
         this.ctx.stroke();
@@ -286,6 +294,11 @@ export class Game {
 
     if (e.button !== 0) return;
 
+    // Save current text if writing before starting new one
+    if (this.isWritingText && this.selectedTool === "text") {
+      this.saveText();
+    }
+
     this.clicked = true;
     const coords = this.screenToWorld(e.clientX, e.clientY);
     this.startX = coords.x;
@@ -295,7 +308,6 @@ export class Game {
       this.painting = true;
       this.pencilPoints = [{ x: this.startX, y: this.startY }];
     } else if (this.selectedTool === "text") {
-      // Start writing text at click position
       this.isWritingText = true;
       this.textPosition = { x: coords.x, y: coords.y };
       this.currentText = "";
