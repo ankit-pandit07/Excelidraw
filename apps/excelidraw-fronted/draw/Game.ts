@@ -1,7 +1,7 @@
 import { getExistingShapes } from "./http";
 import { Tool } from "@/components/Canvas";
 
-type Shape =
+ type Shape =
   | {
       type: "rect";
       x: number;
@@ -37,6 +37,13 @@ type Shape =
       startY: number;
       endX: number;
       endY: number;
+    }
+  | {
+      type: "text";
+      x: number;
+      y: number;
+      text: string;
+      fontSize: number;
     };
 
 export class Game {
@@ -47,7 +54,7 @@ export class Game {
   private clicked: boolean;
   private startX = 0;
   private startY = 0;
-  private selectedTool: Tool | "triangle" | "arrow" = "circle";
+  private selectedTool: Tool | "triangle" | "arrow" | "text" = "circle";
   private pencilPoints: { x: number; y: number }[] = [];
   private painting = true;
   socket: WebSocket;
@@ -58,6 +65,13 @@ export class Game {
   private panning = false;
   private panX = 0;
   private panY = 0;
+
+  // Text state
+  private isWritingText = false;
+  private currentText = "";
+  private textPosition = { x: 0, y: 0 };
+  private showCursor = true;
+  private cursorInterval: number | null = null;
 
   constructor(canvas: HTMLCanvasElement, roomId: string, socket: WebSocket) {
     this.canvas = canvas;
@@ -70,6 +84,8 @@ export class Game {
     this.initHandlers();
     this.initMouseHandlers();
     this.initZoomAndPan();
+    this.initTextHandlers();
+    this.startCursorBlink();
   }
 
   destroy() {
@@ -77,10 +93,15 @@ export class Game {
     this.canvas.removeEventListener("mouseup", this.mouseupHandler);
     this.canvas.removeEventListener("mousemove", this.mousemoveHandler);
     this.canvas.removeEventListener("wheel", this.wheelHandler);
+    document.removeEventListener("keydown", this.keyDownHandle);
+    this.stopCursorBlink();
   }
 
-  setTool(tool: "circle" | "pencil" | "rect" | "triangle" | "arrow") {
+  setTool(tool: "circle" | "pencil" | "rect" | "triangle" | "arrow" | "text") {
     this.selectedTool = tool;
+    this.isWritingText = false;
+    this.currentText = "";
+    this.stopCursorBlink();
   }
 
   async init() {
@@ -97,6 +118,75 @@ export class Game {
         this.clearCanvas();
       }
     };
+  }
+
+  // Cursor blinking animation
+  private startCursorBlink() {
+    this.cursorInterval = window.setInterval(() => {
+      if (this.isWritingText) {
+        this.showCursor = !this.showCursor;
+        this.clearCanvas();
+      }
+    }, 500);
+  }
+
+  private stopCursorBlink() {
+    if (this.cursorInterval) {
+      clearInterval(this.cursorInterval);
+      this.cursorInterval = null;
+    }
+  }
+
+  // Initialize text keyboard handlers
+  private initTextHandlers() {
+    document.addEventListener("keydown", this.keyDownHandle);
+  }
+
+  private keyDownHandle = (e: KeyboardEvent) => {
+    if (!this.isWritingText || this.selectedTool !== "text") return;
+
+    if (e.key === "Enter") {
+      // Save text and finish
+      this.saveText();
+    } else if (e.key === "Escape") {
+      // Cancel text writing
+      this.isWritingText = false;
+      this.currentText = "";
+      this.clearCanvas();
+    } else if (e.key === "Backspace") {
+      // Remove last character
+      this.currentText = this.currentText.slice(0, -1);
+      this.clearCanvas();
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      // Add character to text
+      this.currentText += e.key;
+      this.clearCanvas();
+    }
+  };
+
+  private saveText() {
+    if (this.currentText.trim()) {
+      const textShape: Shape = {
+        type: "text",
+        x: this.textPosition.x,
+        y: this.textPosition.y,
+        text: this.currentText,
+        fontSize: 16 / this.scale
+      };
+
+      this.existingShapes.push(textShape);
+      this.socket.send(
+        JSON.stringify({
+          type: "chat",
+          message: JSON.stringify({ shape: textShape }),
+          roomId: this.roomId,
+        })
+      );
+    }
+
+    this.isWritingText = false;
+    this.currentText = "";
+    this.clearCanvas();
   }
 
   private screenToWorld(x: number, y: number) {
@@ -121,6 +211,7 @@ export class Game {
     this.ctx.save();
     this.ctx.setTransform(this.scale, 0, 0, this.scale, this.setX, this.setY);
     this.ctx.strokeStyle = "rgba(255,255,255)";
+    this.ctx.fillStyle = "rgba(255,255,255)";
 
     this.existingShapes.forEach((shape) => {
       if (shape.type === "rect") {
@@ -155,8 +246,32 @@ export class Game {
         this.ctx.stroke();
       } else if (shape.type === "arrow") {
         this.drawArrow(shape.startX, shape.startY, shape.endX, shape.endY);
+      } else if (shape.type === "text") {
+        this.ctx.font = `${shape.fontSize}px Arial`;
+        this.ctx.fillText(shape.text, shape.x, shape.y);
       }
     });
+
+    // Draw current text being written
+    if (this.isWritingText) {
+      this.ctx.font = `${16 / this.scale}px Arial`;
+      
+      // Draw the text
+      if (this.currentText) {
+        this.ctx.fillText(this.currentText, this.textPosition.x, this.textPosition.y);
+      }
+      
+      // Draw blinking cursor line
+      if (this.showCursor) {
+        const textWidth = this.ctx.measureText(this.currentText).width;
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.textPosition.x + textWidth, this.textPosition.y - 12);
+        this.ctx.lineTo(this.textPosition.x + textWidth, this.textPosition.y + 4);
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeStyle = "rgba(255,255,255,0.8)";
+        this.ctx.stroke();
+      }
+    }
 
     this.ctx.restore();
   }
@@ -169,6 +284,8 @@ export class Game {
       return;
     }
 
+    if (e.button !== 0) return;
+
     this.clicked = true;
     const coords = this.screenToWorld(e.clientX, e.clientY);
     this.startX = coords.x;
@@ -177,6 +294,13 @@ export class Game {
     if (this.selectedTool === "pencil") {
       this.painting = true;
       this.pencilPoints = [{ x: this.startX, y: this.startY }];
+    } else if (this.selectedTool === "text") {
+      // Start writing text at click position
+      this.isWritingText = true;
+      this.textPosition = { x: coords.x, y: coords.y };
+      this.currentText = "";
+      this.showCursor = true;
+      this.clearCanvas();
     }
   };
 
@@ -236,6 +360,7 @@ export class Game {
         endY: coords.y,
       };
     }
+    // Text is handled separately with keyboard input
 
     if (!shape) return;
 

@@ -55,7 +55,6 @@ export async function initDraw(
   if (!ctx) return;
 
   let existingShapes: Shape[] = await getExistingShapes(roomId);
-
   socket.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.type == "chat") {

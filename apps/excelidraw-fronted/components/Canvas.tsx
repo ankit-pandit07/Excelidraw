@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { initDraw } from "@/draw";
 import { IconButton } from "./Icons";
-import { ArrowBigDown, ArrowBigDownDash, ArrowBigRight, Circle, Pencil, RectangleHorizontal, Triangle } from "lucide-react";
+import { ArrowBigDown, ArrowBigDownDash, ArrowBigRight, Circle, Pencil, RectangleHorizontal, Text, Triangle } from "lucide-react";
 import { Game } from "@/draw/Game";
 
-export type Tool="circle" | "rect" | "pencil" | "triangle" | "arrow";
+export type Tool="circle" | "rect" | "pencil" | "triangle" | "arrow" | "text";
 
 export function Canvas({
     roomId,
@@ -67,6 +67,9 @@ function Topbar({selectedTool,setSelectedTool}:{
 }}/>
 <IconButton activated={selectedTool==="arrow"} icon={<ArrowBigRight/>} onClick={()=>{
     setSelectedTool("arrow")
+}}/>
+<IconButton activated={selectedTool==="text"} icon={<Text/>} onClick={()=>{
+    setSelectedTool("text")
 }}/>
 
 </div>
