@@ -30,6 +30,13 @@ type Shape =
       y2: number;
       x3: number;
       y3: number;
+    }
+  | {
+      type: "arrow";
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
     };
 
 export class Game {
@@ -40,7 +47,7 @@ export class Game {
   private clicked: boolean;
   private startX = 0;
   private startY = 0;
-  private selectedTool: Tool | "triangle" = "circle";
+  private selectedTool: Tool | "triangle" | "arrow" = "circle";
   private pencilPoints: { x: number; y: number }[] = [];
   private painting = true;
   socket: WebSocket;
@@ -72,7 +79,7 @@ export class Game {
     this.canvas.removeEventListener("wheel", this.wheelHandler);
   }
 
-  setTool(tool: "circle" | "pencil" | "rect" | "triangle") {
+  setTool(tool: "circle" | "pencil" | "rect" | "triangle" | "arrow") {
     this.selectedTool = tool;
   }
 
@@ -146,6 +153,8 @@ export class Game {
         this.ctx.lineTo(shape.x3, shape.y3);
         this.ctx.closePath();
         this.ctx.stroke();
+      } else if (shape.type === "arrow") {
+        this.drawArrow(shape.startX, shape.startY, shape.endX, shape.endY);
       }
     });
 
@@ -218,6 +227,14 @@ export class Game {
         type: "pencil",
         points: [...this.pencilPoints],
       };
+    } else if (this.selectedTool === "arrow") {
+      shape = {
+        type: "arrow",
+        startX: this.startX,
+        startY: this.startY,
+        endX: coords.x,
+        endY: coords.y,
+      };
     }
 
     if (!shape) return;
@@ -283,6 +300,8 @@ export class Game {
         this.ctx.stroke();
         this.ctx.closePath();
         this.pencilPoints.push({ x: coords.x, y: coords.y });
+      } else if (this.selectedTool === "arrow") {
+        this.drawArrow(this.startX, this.startY, coords.x, coords.y);
       }
 
       this.ctx.restore();
@@ -322,5 +341,31 @@ export class Game {
     this.canvas.addEventListener("wheel", this.wheelHandler, {
       passive: false,
     });
+  }
+
+  private drawArrow(fromx: number, fromy: number, tox: number, toy: number) {
+    const headlen = 10;
+    const dx = tox - fromx;
+    const dy = toy - fromy;
+    const angle = Math.atan2(dy, dx);
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(fromx, fromy);
+    this.ctx.lineTo(tox, toy);
+    this.ctx.stroke();
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(tox, toy);
+    this.ctx.lineTo(
+      tox - headlen * Math.cos(angle - Math.PI / 6),
+      toy - headlen * Math.sin(angle - Math.PI / 6)
+    );
+    this.ctx.lineTo(
+      tox - headlen * Math.cos(angle + Math.PI / 6),
+      toy - headlen * Math.sin(angle + Math.PI / 6)
+    );
+    this.ctx.lineTo(tox, toy);
+    this.ctx.fillStyle = "white";
+    this.ctx.fill();
   }
 }

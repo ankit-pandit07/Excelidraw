@@ -21,15 +21,23 @@ type Shape =
         x: number;
         y: number;
       }[];
-    } |{
-      type:"triangle";
-      x1:number;
-      y1:number;
-      x2:number;
-      y2:number;
-      x3:number;
-      y3:number;
     }
+  | {
+      type: "triangle";
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      x3: number;
+      y3: number;
+    }
+  | {
+      type: "arrow";
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+    };
 
 let scale = 1;
 let setX = 0;
@@ -44,16 +52,12 @@ export async function initDraw(
   socket: WebSocket
 ) {
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
   let existingShapes: Shape[] = await getExistingShapes(roomId);
 
-  if (!ctx) {
-    return;
-  }
-
   socket.onmessage = (event) => {
     const message = JSON.parse(event.data);
-
     if (message.type == "chat") {
       const parseShape = JSON.parse(message.message);
       existingShapes.push(parseShape.shape);
@@ -62,11 +66,9 @@ export async function initDraw(
   };
 
   clearCanvas(existingShapes, canvas, ctx);
+
   let painting = false;
-  let pencilPoints: {
-    x: number;
-    y: number;
-  }[] = [];
+  let pencilPoints: { x: number; y: number }[] = [];
   let clicked = false;
   let startX = 0;
   let startY = 0;
@@ -75,7 +77,6 @@ export async function initDraw(
     const rect = canvas.getBoundingClientRect();
     const canvasX = x - rect.left;
     const canvasY = y - rect.top;
-
     return {
       x: (canvasX - setX) / scale,
       y: (canvasY - setY) / scale,
@@ -104,6 +105,7 @@ export async function initDraw(
       ctx.moveTo(startX, startY);
     }
   });
+
   canvas.addEventListener("mouseup", (e) => {
     if (panning) {
       panning = false;
@@ -116,6 +118,7 @@ export async function initDraw(
     const height = coords.y - startY;
     //@ts-ignore
     const selectedTool = window.selectedTool;
+
     let shape: Shape | null = null;
     if (selectedTool === "rect") {
       shape = {
@@ -140,27 +143,33 @@ export async function initDraw(
         type: "pencil",
         points: pencilPoints,
       };
-    }else if(selectedTool==="triangle"){
-      shape={
-        type:"triangle",
-        x1:startX+width/2,
-        y1:startY,
-        x2:startX,
-        y2:startY+height,
-        x3:startX+width,
-        y3:startY+height
-      }
+    } else if (selectedTool === "triangle") {
+      shape = {
+        type: "triangle",
+        x1: startX + width / 2,
+        y1: startY,
+        x2: startX,
+        y2: startY + height,
+        x3: startX + width,
+        y3: startY + height,
+      };
+    } else if (selectedTool === "arrow") {
+      shape = {
+        type: "arrow",
+        startX,
+        startY,
+        endX: coords.x,
+        endY: coords.y,
+      };
     }
-    if (!shape) {
-      return;
-    }
+
+    if (!shape) return;
+
     existingShapes.push(shape);
     socket.send(
       JSON.stringify({
         type: "chat",
-        message: JSON.stringify({
-          shape,
-        }),
+        message: JSON.stringify({ shape }),
         roomId,
       })
     );
@@ -186,27 +195,27 @@ export async function initDraw(
       ctx.strokeStyle = "rgba(255,255,255)";
       //@ts-ignore
       const selectedTool = window.selectedTool;
+
       if (selectedTool === "rect") {
         ctx.strokeRect(startX, startY, width, height);
       } else if (selectedTool === "circle") {
         const radius = Math.max(width, height) / 2;
         const centerX = startX + radius;
         const centerY = startY + radius;
-
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         ctx.stroke();
         ctx.closePath();
-      } else if(selectedTool==="triangle"){
+      } else if (selectedTool === "triangle") {
         ctx.beginPath();
-        ctx.moveTo(startX+width/2,startY);
-        ctx.lineTo(startX,startY+height);
-        ctx.lineTo(startX+width,startY+height);
+        ctx.moveTo(startX + width / 2, startY);
+        ctx.lineTo(startX, startY + height);
+        ctx.lineTo(startX + width, startY + height);
         ctx.closePath();
         ctx.stroke();
-      }
-      else if (selectedTool === "pencil" && painting) {
-        const coords = screenToWorld(e.clientX, e.clientY);
+      } else if (selectedTool === "arrow") {
+        drawArrow(ctx, startX, startY, coords.x, coords.y);
+      } else if (selectedTool === "pencil" && painting) {
         const lastPoint = pencilPoints[pencilPoints.length - 1];
         ctx.beginPath();
         ctx.moveTo(lastPoint.x, lastPoint.y);
@@ -215,37 +224,60 @@ export async function initDraw(
         ctx.lineCap = "round";
         ctx.stroke();
         ctx.closePath();
-
         pencilPoints.push({ x: coords.x, y: coords.y });
-        return;
       }
     }
   });
 
-  // Wheel handler for zoom
+  // Zoom (wheel)
   const wheelHandler = (e: WheelEvent) => {
     e.preventDefault();
-
     const zoomFactor = 1.1;
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-
     const worldX = (mouseX - setX) / scale;
     const worldY = (mouseY - setY) / scale;
-
     const direction = e.deltaY < 0 ? 1 : -1;
     const newScale = scale * (direction > 0 ? zoomFactor : 1 / zoomFactor);
-
     setX = mouseX - worldX * newScale;
     setY = mouseY - worldY * newScale;
-
     scale = newScale;
-
     clearCanvas(existingShapes, canvas, ctx);
   };
-
   canvas.addEventListener("wheel", wheelHandler, { passive: false });
+}
+
+function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  fromx: number,
+  fromy: number,
+  tox: number,
+  toy: number
+) {
+  const headlen = 10; // arrow head length
+  const dx = tox - fromx;
+  const dy = toy - fromy;
+  const angle = Math.atan2(dy, dx);
+
+  ctx.beginPath();
+  ctx.moveTo(fromx, fromy);
+  ctx.lineTo(tox, toy);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(tox, toy);
+  ctx.lineTo(
+    tox - headlen * Math.cos(angle - Math.PI / 6),
+    toy - headlen * Math.sin(angle - Math.PI / 6)
+  );
+  ctx.lineTo(
+    tox - headlen * Math.cos(angle + Math.PI / 6),
+    toy - headlen * Math.sin(angle + Math.PI / 6)
+  );
+  ctx.lineTo(tox, toy);
+  ctx.fillStyle = "white";
+  ctx.fill();
 }
 
 function clearCanvas(
@@ -253,11 +285,9 @@ function clearCanvas(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D
 ) {
-  // Apply zoom/pan transformation
   ctx.save();
   ctx.setTransform(scale, 0, 0, scale, setX, setY);
 
-  // Calculate world coordinates for clearing
   const worldLeft = -setX / scale;
   const worldTop = -setY / scale;
   const worldWidth = canvas.width / scale;
@@ -267,9 +297,9 @@ function clearCanvas(
   ctx.fillStyle = "rgba(0,0,0)";
   ctx.fillRect(worldLeft, worldTop, worldWidth, worldHeight);
 
-  existingShapes.map((shape) => {
+  existingShapes.forEach((shape) => {
+    ctx.strokeStyle = "rgba(255,255,255)";
     if (shape.type === "rect") {
-      ctx.strokeStyle = "rgba(255,255,255)";
       ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
     } else if (shape.type === "circle") {
       ctx.beginPath();
@@ -286,16 +316,18 @@ function clearCanvas(
       }
       ctx.stroke();
       ctx.closePath();
-    }else if(shape.type==="triangle"){
+    } else if (shape.type === "triangle") {
       ctx.beginPath();
-      ctx.moveTo(shape.x1,shape.y1);
-      ctx.lineTo(shape.x2,shape.y2);
-      ctx.lineTo(shape.x3,shape.y3);
+      ctx.moveTo(shape.x1, shape.y1);
+      ctx.lineTo(shape.x2, shape.y2);
+      ctx.lineTo(shape.x3, shape.y3);
       ctx.closePath();
-      ctx.strokeStyle="rgba(255,255,255)"
       ctx.stroke();
+    } else if (shape.type === "arrow") {
+      drawArrow(ctx, shape.startX, shape.startY, shape.endX, shape.endY);
     }
   });
+
   ctx.restore();
 }
 
@@ -312,7 +344,7 @@ async function getExistingShapes(roomId: string) {
           return parsed.shape;
         }
       } catch {
-        // Not a shape JSON, ignore
+        // ignore non-shape messages
       }
       return null;
     })
