@@ -61,7 +61,7 @@ wss.on('connection', function connection(ws, request) {
 
     if (parseData.type === "join_room") {
       const user = users.find(x => x.ws === ws);
-      user?.rooms.push(parseData.roomId);
+      user?.rooms.push(parseData.payload.roomId);
     }
 
     if (parseData.type === "leave_room") {
@@ -69,32 +69,118 @@ wss.on('connection', function connection(ws, request) {
       if (!user) {
         return;
       }
-      user.rooms = user?.rooms.filter(x => x === parseData.room);
+      user.rooms = user?.rooms.filter(x => x === parseData.payload.roomId);
     }
 
-    if (parseData.type === "chat") {
-      const roomId = parseData.roomId;
-      const message = parseData.message;
+    if (parseData.type === "draw") {
+      const roomId = parseData.payload.roomId;
+      const shape = parseData.payload.shape;
 
-      await prismaClient.chat.create({
-        data: {
-          roomId: Number(roomId),
-          message,
-          userId
+      try {
+
+        if (shape) {
+          await prismaClient.canvasElement.create({
+            data: {
+              roomId: Number(roomId),
+              type: shape.type,
+              data: shape
+            }
+          });
         }
-      });
+      } catch (err) {
+        console.error(`[WS] Failed to save drawing event:`, err);
+      }
 
       users.forEach(user => {
         if (user.rooms.includes(roomId)) {
           user.ws.send(JSON.stringify({
-            type: "chat",
-            message: message,
-            roomId
+            type: "draw",
+            payload: { shape, roomId }
           }))
         }
       })
     }
 
+    if (parseData.type === "erase") {
+      const roomId = parseData.payload.roomId;
+      const shapeId = parseData.payload.id;
+
+      try {
+        await prismaClient.canvasElement.update({
+          where: { id: shapeId },
+          data: { isDeleted: true }
+        });
+      } catch (err) {
+        console.error(`[WS] Failed to erase shape:`, err);
+      }
+
+      users.forEach(user => {
+        if (user.rooms.includes(roomId)) {
+          user.ws.send(JSON.stringify({
+            type: "erase",
+            payload: { id: shapeId, roomId }
+          }));
+        }
+      });
+    }
+
+    if (parseData.type === "undo" || parseData.type === "redo") {
+      const roomId = parseData.payload.roomId;
+      const shapeId = parseData.payload.id;
+      const action = parseData.payload.action; // "erase" or "restore"
+
+      try {
+        await prismaClient.canvasElement.update({
+          where: { id: shapeId },
+          data: { isDeleted: action === "erase" }
+        });
+      } catch (err) {
+        console.error(`[WS] Failed to process ${parseData.type}:`, err);
+      }
+
+      users.forEach(user => {
+        if (user.rooms.includes(roomId)) {
+          user.ws.send(JSON.stringify({
+            type: parseData.type,
+            payload: { id: shapeId, action, roomId }
+          }));
+        }
+      });
+    }
+
+    if (parseData.type === "cursor_move") {
+      const roomId = parseData.payload.roomId;
+      const senderUserId = users.find(x => x.ws === ws)?.userId;
+
+      users.forEach(user => {
+        if (user.ws !== ws && user.rooms.includes(roomId)) {
+          user.ws.send(JSON.stringify({
+            type: "cursor_move",
+            payload: { ...parseData.payload, userId: senderUserId }
+          }));
+        }
+      });
+    }
+  });
+
+  ws.on('close', () => {
+    const userIndex = users.findIndex(x => x.ws === ws);
+    if (userIndex !== -1) {
+      const user = users[userIndex];
+      if (user) {
+        user.rooms.forEach(roomId => {
+          users.forEach(otherUser => {
+            if (otherUser.ws !== ws && otherUser.rooms.includes(roomId)) {
+              otherUser.ws.send(JSON.stringify({
+                type: "user_left",
+                payload: { userId: user.userId, roomId }
+              }));
+            }
+          });
+        });
+      }
+      users.splice(userIndex, 1);
+    }
   });
 
 });

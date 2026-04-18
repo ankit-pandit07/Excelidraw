@@ -5,6 +5,7 @@ import { JWT_SECRET } from "@repo/backend-common/config";
 import {CreateRoomSchema, CreateUserSchema, CreateUserSignin} from "@repo/common/types"
 import { prismaClient } from "@repo/db/client";
 import cors from "cors"
+import bcrypt from "bcryptjs";
 
 const app=express();
 app.use(express.json())
@@ -13,7 +14,7 @@ app.use(cors())
 app.post("/signup",async(req,res)=>{
     const parseData=CreateUserSchema.safeParse(req.body);
     if(!parseData.success){
-        console.log(parseData.error)
+        console.error(parseData.error)
         res.json({
             message:"Incorrect Inputs"
         })
@@ -22,10 +23,11 @@ app.post("/signup",async(req,res)=>{
 
     //TODO:compare the hashed password here
  try{
+      const hashedPassword = await bcrypt.hash(parseData.data.password, 10);
       const user=await prismaClient.user.create({
      data:{
         email:parseData.data?.email,
-        password:parseData.data.password,
+        password:hashedPassword,
         name:parseData.data.name
      }
     })
@@ -51,8 +53,7 @@ app.post("/signin",async(req,res)=>{
     //TODO:compare the hashed pssword here
     const user=await prismaClient.user.findFirst({
         where:{
-            email:parseData.data.email,
-            password:parseData.data.password
+            email:parseData.data.email
         }
     })
     if(!user){
@@ -62,12 +63,22 @@ app.post("/signin",async(req,res)=>{
         return;
     }
 
+    const isPasswordValid = await bcrypt.compare(parseData.data.password, user.password);
+    if(!isPasswordValid){
+        res.status(403).json({
+            message:"Not authorized"
+        })
+        return;
+    }
+
     const token=jwt.sign({
-        userId:user?.id
+        userId:user?.id,
+        name:user?.name
     },JWT_SECRET)
 
     res.json({
-        token
+        token,
+        name: user?.name
     })
 })
 app.post("/room",middleware,async(req,res)=>{
@@ -78,8 +89,11 @@ app.post("/room",middleware,async(req,res)=>{
         })
         return;
     }
-    //@ts-ignore : TODO Fix this
     const userId=req.userId;
+    if (!userId) {
+        res.status(401).json({ message: "Not authorized" });
+        return;
+    }
    try{
      const room=await prismaClient.room.create({
         data:{
@@ -97,27 +111,31 @@ app.post("/room",middleware,async(req,res)=>{
 }
 })
 
-app.get("/chats/:roomId",async (req,res)=>{
-    try{
-    const roomId=Number(req.params.roomId);
-    const messages=await prismaClient.chat.findMany({
-        where:{
-            roomId:roomId
-        },
-        orderBy:{
-            id:"desc"
-        },
-        take:1000
-    })
-    res.json({
-        messages
-    })
-}catch(e){
-    res.json({
-        message:[]
-    })
-}
-})
+
+app.get("/canvas/:roomId", async (req, res) => {
+    try {
+        const roomId = Number(req.params.roomId);
+        const elements = await prismaClient.canvasElement.findMany({
+            where: { roomId: roomId },
+            orderBy: { createdAt: "asc" },
+            take: 1000
+        });
+        
+        // Return exactly what the frontend expects
+        res.json({
+            elements: elements.map(el => ({
+                id: el.id,
+                type: el.type,
+                data: el.data,
+                isDeleted: el.isDeleted,
+                createdAt: el.createdAt
+            }))
+        });
+    } catch (e) {
+        res.json({ elements: [] });
+    }
+});
+
 app.get("/room/:slug",async (req,res)=>{
     const slug=req.params.slug;
     const room=await prismaClient.room.findFirst({
@@ -131,4 +149,4 @@ app.get("/room/:slug",async (req,res)=>{
 })
 
 const PORT = process.env.PORT || 3001; 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT);

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Mail, Lock, User } from "lucide-react";
 import axios from "axios";
+import { HTTP_BACKEND } from "@/config";
 
 export function Authpage({ isSignin }: { isSignin: boolean }) {
   const router = useRouter();
@@ -20,20 +21,24 @@ export function Authpage({ isSignin }: { isSignin: boolean }) {
 
     try {
       if (isSignin) {
-        const res = await axios.post("/signin", {
+        const res = await axios.post<{ message?: string; token?: string; name?: string }>(`${HTTP_BACKEND}/signin`, {
           email: form.email,
           password: form.password,
         });
-        //@ts-ignore
         setMessage(res.data.message || "Signed in successfully!");
+        if (res.data.token) {
+          localStorage.setItem("token", res.data.token);
+        }
+        if (res.data.name) {
+          localStorage.setItem("username", res.data.name);
+        }
         router.push("/canvas");
       } else {
-        const res = await axios.post("/signup", {
+        const res = await axios.post<{ message?: string }>(`${HTTP_BACKEND}/signup`, {
           name: form.name,
           email: form.email,
           password: form.password,
         });
-        //@ts-ignore
         setMessage(res.data.message || "Account created successfully!");
         router.push("/signin");
       }

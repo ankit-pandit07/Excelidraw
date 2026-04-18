@@ -4,23 +4,21 @@ import axios from "axios";
 
 
 export async function getExistingShapes(roomId: string) {
-  const res = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
-  //@ts-ignore
-  const messages = res.data.messages;
+  try {
+    const res = await axios.get(`${HTTP_BACKEND}/canvas/${roomId}`);
+    //@ts-ignore
+    const elements = res.data.elements || [];
 
-  const shapes = messages
-    .map((x: { message: string }) => {
-      try {
-        const parsed = JSON.parse(x.message);
-        if (parsed && parsed.shape) {
-          return parsed.shape;
-        }
-      } catch {
-        // Not a shape JSON, ignore
-      }
-      return null;
-    })
-    .filter(Boolean);
+    const shapes = elements.map((el: any) => ({
+      ...el.data,
+      type: el.type,
+      id: el.id,
+      isDeleted: el.isDeleted
+    }));
 
-  return shapes;
+    return shapes;
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
 }

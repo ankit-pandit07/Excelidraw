@@ -4,22 +4,37 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas } from "./Canvas";
 import { WEBSOCKET_URL } from "@/config";
 
+import { useRouter } from "next/navigation";
+
 export function RoomCanvas({roomId}:{roomId:string}){
+    const router = useRouter();
     const [socket,setSocket]=useState<WebSocket | null>(null);
 
 
     useEffect(()=>{
-        const ws=new WebSocket(`${WEBSOCKET_URL}?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIwYjc5ZDE0MC1jMjRlLTRlOWYtYTU5Yy1jZTM4MzZkYzM4NDUiLCJpYXQiOjE3NjE3NDc2OTl9.7PaLRX3RaM7xCEF_ItQ221glVwepmN96uQ3Y9CfBhks`)
+        const token = localStorage.getItem("token");
+        if (!token) {
+            router.push("/signin");
+            return;
+        }
+        const ws=new WebSocket(`${WEBSOCKET_URL}?token=${token}`)
 
         ws.onopen=()=>{
             setSocket(ws)
            const data=JSON.stringify({
                 type:"join_room",
-                roomId
+                payload: { roomId }
             })
             ws.send(data);
         }
-    },[])
+
+        return () => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "leave_room", payload: { roomId } }));
+            }
+            ws.close();
+        }
+    },[roomId])
 
 
     if(!socket){

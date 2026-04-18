@@ -12,6 +12,7 @@
     "@repo/db": "*",
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2"
@@ -20,6 +21,7 @@
     "@repo/backend-common": "*",
     "@repo/common": "*",
     "@repo/typescript-config": "*",
+    "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.3"
   },
   "keywords": [],
