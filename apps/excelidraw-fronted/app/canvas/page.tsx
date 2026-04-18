@@ -27,7 +27,7 @@ export default function CanvasDashboard() {
     setError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.post(`${HTTP_BACKEND}/room`, { name: roomSlug }, {
+      const res = await axios.post<{ roomId: string | number }>(`${HTTP_BACKEND}/room`, { name: roomSlug }, {
         headers: { Authorization: token }
       });
       router.push(`/canvas/${res.data.roomId}`);
@@ -42,7 +42,7 @@ export default function CanvasDashboard() {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.get(`${HTTP_BACKEND}/room/${roomSlug}`);
+      const res = await axios.get<{ room?: { id: string | number } }>(`${HTTP_BACKEND}/room/${roomSlug}`);
       if (res.data.room) {
         router.push(`/canvas/${res.data.room.id}`);
       } else {

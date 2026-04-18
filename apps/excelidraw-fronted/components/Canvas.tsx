@@ -1,105 +1,167 @@
 import { useEffect, useRef, useState } from "react";
 import { initDraw } from "@/draw";
 import { IconButton } from "./Icons";
-import { ArrowBigRight, Circle, Eraser, Pencil, RectangleHorizontal, Text, Triangle, Download, Upload } from "lucide-react";
+import { ArrowBigRight, Circle, Eraser, Pencil, RectangleHorizontal, Text, Triangle, Download, Upload, Undo, Redo, FileJson } from "lucide-react";
 import { Game } from "@/draw/Game";
 
-export type Tool="circle" | "rect" | "pencil" | "triangle" | "arrow" | "text" | "eraser";
+export type Tool = "circle" | "rect" | "pencil" | "triangle" | "arrow" | "text" | "eraser";
 
 export function Canvas({
     roomId,
     socket
-}:{
-    socket:WebSocket;
-    roomId:string;
-}){
-   const canvasRef=useRef<HTMLCanvasElement>(null);
-   const [game,setGame]=useState<Game>();
-   const [selectedTool,setSelectedTool]=useState<Tool>("circle")
+}: {
+    socket: WebSocket;
+    roomId: string;
+}) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [game, setGame] = useState<Game>();
+    const [selectedTool, setSelectedTool] = useState<Tool>("circle");
 
-   useEffect(()=>{
-   game?.setTool(selectedTool);
-   },[selectedTool,game]);
+    useEffect(() => {
+        game?.setTool(selectedTool);
+    }, [selectedTool, game]);
 
-    useEffect(()=>{
-        if(canvasRef.current){
-            const g=new Game(canvasRef.current,roomId,socket)
+    // Cursor polling to override default while respecting Game's spacebar panning
+    useEffect(() => {
+        if (!game || !canvasRef.current) return;
+        const interval = setInterval(() => {
+            const isSpacePressed = (game as any).isSpacePressed;
+            if (isSpacePressed) return;
+            
+            let cursor = "default";
+            switch (selectedTool) {
+                case "pencil":
+                case "rect":
+                case "circle":
+                case "triangle":
+                case "arrow":
+                    cursor = "crosshair";
+                    break;
+                case "text":
+                    cursor = "text";
+                    break;
+                case "eraser":
+                    cursor = "cell";
+                    break;
+            }
+            if (canvasRef.current.style.cursor !== cursor) {
+                canvasRef.current.style.cursor = cursor;
+            }
+        }, 100);
+        return () => clearInterval(interval);
+    }, [selectedTool, game]);
+
+    useEffect(() => {
+        if (canvasRef.current) {
+            const g = new Game(canvasRef.current, roomId, socket);
             setGame(g);
 
-            return ()=>{
+            return () => {
                 g.destroy();
             }
-
         }
-    },[roomId, socket])
+    }, [roomId, socket]);
 
-    return <div style={{
-        height:"100vh",
-        overflow:"hidden"
-       
-    }}>
-         <canvas ref={canvasRef} width={2000} height={1000}></canvas>
-         <Topbar setSelectedTool={setSelectedTool} selectedTool={selectedTool}/>
-         <div style={{ position: "fixed", top: 10, right: 10, display: "flex", gap: "10px" }}>
-            <button onClick={() => game?.exportToPNG()} className="bg-gray-800 text-white px-3 py-2 rounded flex items-center gap-2 hover:bg-gray-700 transition">
-                <Download size={18} /> PNG
-            </button>
-            <button onClick={() => game?.exportToJSON()} className="bg-gray-800 text-white px-3 py-2 rounded flex items-center gap-2 hover:bg-gray-700 transition">
-                <Download size={18} /> JSON
-            </button>
-            <label className="bg-gray-800 text-white px-3 py-2 rounded flex items-center gap-2 cursor-pointer hover:bg-gray-700 transition">
-                <Upload size={18} /> Import
-                <input type="file" accept=".json" className="hidden" style={{display: "none"}} onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            if (typeof event.target?.result === "string") {
-                                game?.importFromJSON(event.target.result);
-                            }
-                        };
-                        reader.readAsText(file);
-                    }
-                    // clear input to allow importing same file again
-                    e.target.value = '';
-                }} />
-            </label>
-         </div>
-    </div>
+    return (
+        <div className="h-screen w-screen overflow-hidden bg-[#0f0f0f]">
+            <canvas ref={canvasRef} width={2000} height={1000}></canvas>
+            
+            <Topbar roomId={roomId} game={game} />
+            <LeftToolbar selectedTool={selectedTool} setSelectedTool={setSelectedTool} />
+        </div>
+    );
 }
 
-function Topbar({selectedTool,setSelectedTool}:{
-    selectedTool:Tool,
-    setSelectedTool:(s:Tool)=>void
-}){
-   return <div style={{
-    position:"fixed",
-    top:10,
-    left:10
-}}>
-    <div className="flex gap-t">
-<IconButton activated={selectedTool==="pencil"} icon={<Pencil/>} onClick={()=>{
-    setSelectedTool("pencil")
-}}/>
-<IconButton activated={selectedTool==="rect"} icon={<RectangleHorizontal/>} onClick={()=>{
-    setSelectedTool("rect")
-}}/>
-<IconButton activated={selectedTool==="circle"} icon={<Circle/>} onClick={()=>{
-    setSelectedTool("circle")
-}}/>
-<IconButton activated={selectedTool==="triangle"} icon={<Triangle/>} onClick={()=>{
-    setSelectedTool("triangle")
-}}/>
-<IconButton activated={selectedTool==="arrow"} icon={<ArrowBigRight/>} onClick={()=>{
-    setSelectedTool("arrow")
-}}/>
-<IconButton activated={selectedTool==="text"} icon={<Text/>} onClick={()=>{
-    setSelectedTool("text")
-}}/>
-<IconButton activated={selectedTool==="eraser"} icon={<Eraser/>} onClick={()=>{
-    setSelectedTool("eraser")
-}}/>
+function Topbar({ roomId, game }: { roomId: string, game?: Game }) {
+    const [zoom, setZoom] = useState(100);
 
-</div>
-</div>
+    // Poll for zoom scale without touching Game.ts
+    useEffect(() => {
+        if (!game) return;
+        const interval = setInterval(() => {
+            const scale = (game as any).scale;
+            if (scale !== undefined) {
+                setZoom(Math.round(scale * 100));
+            }
+        }, 100);
+        return () => clearInterval(interval);
+    }, [game]);
+
+    return (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 flex items-center justify-between bg-[#1a1a1a]/80 backdrop-blur-md border border-[#2a2a2a] rounded-2xl shadow-lg px-4 py-3 w-[95%] max-w-6xl z-50 transition-all">
+            {/* Left: Room Name */}
+            <div className="flex items-center gap-4 text-white">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white text-black shadow-sm">
+                    <span className="font-bold text-sm">Ex</span>
+                </div>
+                <span className="font-medium text-sm text-gray-200 truncate max-w-[150px] md:max-w-[300px]">
+                    {roomId}
+                </span>
+            </div>
+
+            {/* Center: Undo/Redo & Zoom */}
+            <div className="flex items-center gap-2 border-l border-r border-[#2a2a2a] px-4">
+                <IconButton 
+                    title="Undo (Ctrl+Z)"
+                    icon={<Undo size={18} />} 
+                    onClick={() => game?.undo()} 
+                />
+                <IconButton 
+                    title="Redo (Ctrl+Y)"
+                    icon={<Redo size={18} />} 
+                    onClick={() => game?.redo()} 
+                />
+                <div className="px-3 py-1 ml-2 bg-[#2f2f2f] rounded-lg text-xs font-medium text-gray-300 shadow-inner select-none cursor-default">
+                    {zoom}%
+                </div>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2">
+                <IconButton 
+                    title="Export as PNG"
+                    icon={<Download size={18} />} 
+                    onClick={() => game?.exportToPNG()} 
+                />
+                <IconButton 
+                    title="Export as JSON"
+                    icon={<FileJson size={18} />} 
+                    onClick={() => game?.exportToJSON()} 
+                />
+                <label className="m-1 flex cursor-pointer items-center justify-center rounded-xl p-2.5 transition-all duration-200 ease-out hover:scale-105 active:scale-95 bg-transparent text-[#9ca3af] hover:bg-[#2f2f2f] hover:text-white" title="Import JSON">
+                    <Upload size={18} />
+                    <input type="file" accept=".json" className="hidden" style={{display: "none"}} onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                if (typeof event.target?.result === "string") {
+                                    game?.importFromJSON(event.target.result);
+                                }
+                            };
+                            reader.readAsText(file);
+                        }
+                        e.target.value = '';
+                    }} />
+                </label>
+            </div>
+        </div>
+    );
+}
+
+function LeftToolbar({ selectedTool, setSelectedTool }: {
+    selectedTool: Tool,
+    setSelectedTool: (s: Tool) => void
+}) {
+    return (
+        <div className="fixed top-1/2 left-4 -translate-y-1/2 flex flex-col gap-2 bg-[#1a1a1a]/80 backdrop-blur-md border border-[#2a2a2a] rounded-2xl shadow-lg p-2 z-50 transition-all">
+            <IconButton title="Pencil" activated={selectedTool === "pencil"} icon={<Pencil size={20} />} onClick={() => setSelectedTool("pencil")} />
+            <IconButton title="Rectangle" activated={selectedTool === "rect"} icon={<RectangleHorizontal size={20} />} onClick={() => setSelectedTool("rect")} />
+            <IconButton title="Circle" activated={selectedTool === "circle"} icon={<Circle size={20} />} onClick={() => setSelectedTool("circle")} />
+            <IconButton title="Triangle" activated={selectedTool === "triangle"} icon={<Triangle size={20} />} onClick={() => setSelectedTool("triangle")} />
+            <IconButton title="Arrow" activated={selectedTool === "arrow"} icon={<ArrowBigRight size={20} />} onClick={() => setSelectedTool("arrow")} />
+            <IconButton title="Text" activated={selectedTool === "text"} icon={<Text size={20} />} onClick={() => setSelectedTool("text")} />
+            <IconButton title="Eraser" activated={selectedTool === "eraser"} icon={<Eraser size={20} />} onClick={() => setSelectedTool("eraser")} />
+        </div>
+    );
 }
