@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { initDraw } from "@/draw";
 import { IconButton } from "./Icons";
-import { ArrowBigRight, Circle, Eraser, Pencil, RectangleHorizontal, Text, Triangle, Download, Upload, Undo, Redo, FileJson } from "lucide-react";
+import { ArrowBigRight, Circle, Eraser, Pencil, RectangleHorizontal, Text, Triangle, Download, Upload, Undo, Redo, FileJson, MousePointer2, Palette } from "lucide-react";
 import { Game } from "@/draw/Game";
 
-export type Tool = "circle" | "rect" | "pencil" | "triangle" | "arrow" | "text" | "eraser";
+export type Tool = "circle" | "rect" | "pencil" | "triangle" | "arrow" | "text" | "eraser" | "select";
 
 export function Canvas({
     roomId,
@@ -15,7 +15,9 @@ export function Canvas({
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [game, setGame] = useState<Game>();
-    const [selectedTool, setSelectedTool] = useState<Tool>("circle");
+    const [selectedTool, setSelectedTool] = useState<Tool>("select");
+    const [showStylingPanel, setShowStylingPanel] = useState(false);
+    const [selectedShapeCount, setSelectedShapeCount] = useState(0);
 
     useEffect(() => {
         game?.setTool(selectedTool);
@@ -54,6 +56,9 @@ export function Canvas({
     useEffect(() => {
         if (canvasRef.current) {
             const g = new Game(canvasRef.current, roomId, socket);
+            g.onSelectionChange = (ids) => {
+                setSelectedShapeCount(ids.size);
+            };
             setGame(g);
 
             return () => {
@@ -67,7 +72,13 @@ export function Canvas({
             <canvas ref={canvasRef} width={2000} height={1000}></canvas>
             
             <Topbar roomId={roomId} game={game} />
-            <LeftToolbar selectedTool={selectedTool} setSelectedTool={setSelectedTool} />
+            <LeftToolbar 
+                selectedTool={selectedTool} 
+                setSelectedTool={setSelectedTool} 
+                showStylingPanel={showStylingPanel}
+                setShowStylingPanel={setShowStylingPanel}
+            />
+            {showStylingPanel && selectedShapeCount > 0 && selectedTool !== "eraser" && <FloatingStylingPanel game={game} />}
         </div>
     );
 }
@@ -149,12 +160,17 @@ function Topbar({ roomId, game }: { roomId: string, game?: Game }) {
     );
 }
 
-function LeftToolbar({ selectedTool, setSelectedTool }: {
+function LeftToolbar({ selectedTool, setSelectedTool, showStylingPanel, setShowStylingPanel }: {
     selectedTool: Tool,
-    setSelectedTool: (s: Tool) => void
+    setSelectedTool: (s: Tool) => void,
+    showStylingPanel: boolean,
+    setShowStylingPanel: (s: boolean) => void
 }) {
     return (
         <div className="fixed top-1/2 left-4 -translate-y-1/2 flex flex-col gap-2 bg-[#1a1a1a]/80 backdrop-blur-md border border-[#2a2a2a] rounded-2xl shadow-lg p-2 z-50 transition-all">
+            <IconButton title="Toggle Styling" activated={showStylingPanel} icon={<Palette size={20} />} onClick={() => setShowStylingPanel(!showStylingPanel)} />
+            <div className="w-full h-[1px] bg-[#2a2a2a] my-1"></div>
+            <IconButton title="Select" activated={selectedTool === "select"} icon={<MousePointer2 size={20} />} onClick={() => setSelectedTool("select")} />
             <IconButton title="Pencil" activated={selectedTool === "pencil"} icon={<Pencil size={20} />} onClick={() => setSelectedTool("pencil")} />
             <IconButton title="Rectangle" activated={selectedTool === "rect"} icon={<RectangleHorizontal size={20} />} onClick={() => setSelectedTool("rect")} />
             <IconButton title="Circle" activated={selectedTool === "circle"} icon={<Circle size={20} />} onClick={() => setSelectedTool("circle")} />
@@ -162,6 +178,54 @@ function LeftToolbar({ selectedTool, setSelectedTool }: {
             <IconButton title="Arrow" activated={selectedTool === "arrow"} icon={<ArrowBigRight size={20} />} onClick={() => setSelectedTool("arrow")} />
             <IconButton title="Text" activated={selectedTool === "text"} icon={<Text size={20} />} onClick={() => setSelectedTool("text")} />
             <IconButton title="Eraser" activated={selectedTool === "eraser"} icon={<Eraser size={20} />} onClick={() => setSelectedTool("eraser")} />
+        </div>
+    );
+}
+
+function FloatingStylingPanel({ game }: { game?: Game }) {
+    const [strokeColor, setStrokeColor] = useState("#ffffff");
+    const [fillColor, setFillColor] = useState("transparent");
+    const [strokeWidth, setStrokeWidth] = useState(2);
+
+    useEffect(() => {
+        if (!game) return;
+        game.currentStrokeColor = strokeColor;
+        game.currentFillColor = fillColor;
+        game.currentStrokeWidth = strokeWidth;
+        game.updateShapeStyle({ strokeColor, fillColor, strokeWidth });
+    }, [strokeColor, fillColor, strokeWidth, game]);
+
+    return (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-[#1a1a1a]/90 backdrop-blur-md border border-[#2a2a2a] rounded-full shadow-xl px-6 py-3 z-50 flex flex-row items-center gap-6 text-white transition-all animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Stroke</span>
+                <div className="flex gap-2">
+                    {["#ffffff", "#ef4444", "#3b82f6", "#22c55e", "#eab308"].map(c => (
+                        <button key={c} onClick={() => setStrokeColor(c)} className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 active:scale-95 ${strokeColor === c ? 'border-white scale-110' : 'border-transparent'}`} style={{backgroundColor: c}}></button>
+                    ))}
+                </div>
+            </div>
+            
+            <div className="w-[1px] h-6 bg-[#2a2a2a]"></div>
+
+            <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Fill</span>
+                <div className="flex gap-2">
+                    <button onClick={() => setFillColor("transparent")} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-transform hover:scale-110 active:scale-95 ${fillColor === "transparent" ? 'border-white scale-110' : 'border-[#2a2a2a]'}`}>
+                        <div className="w-full h-full bg-transparent rounded-full relative overflow-hidden"><div className="absolute top-1/2 left-0 w-full h-[2px] bg-red-500 -rotate-45 -translate-y-1/2"></div></div>
+                    </button>
+                    {["#ef4444", "#3b82f6", "#22c55e", "#eab308"].map(c => (
+                        <button key={c} onClick={() => setFillColor(c)} className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 active:scale-95 ${fillColor === c ? 'border-white scale-110' : 'border-transparent'}`} style={{backgroundColor: c}}></button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="w-[1px] h-6 bg-[#2a2a2a]"></div>
+
+            <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Width</span>
+                <input type="range" min="1" max="10" value={strokeWidth} onChange={(e) => setStrokeWidth(parseInt(e.target.value))} className="w-24 accent-white cursor-pointer" />
+            </div>
         </div>
     );
 }
